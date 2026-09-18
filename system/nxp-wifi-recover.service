@@ -1,0 +1,8 @@
+[Unit]
+Description=Recover NXP Wi-Fi when mlan0 disappears
+After=rb-jetson-service-net-wifi-nxp.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/nvidia/dsw_ws/nova_vla/system/recover_nxp_wifi.sh
+TimeoutStartSec=60s

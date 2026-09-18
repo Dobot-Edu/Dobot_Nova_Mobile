@@ -1,0 +1,17 @@
+[Unit]
+Description=Huarui chassis platform registration and heartbeat monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=nvidia
+WorkingDirectory=/home/nvidia/dsw_ws/nova_vla
+ExecStart=/usr/bin/python3 -u /home/nvidia/dsw_ws/nova_vla/scripts/diagnostics/chassis_motion_test.py --monitor --connect-timeout 3600
+Restart=always
+RestartSec=2
+KillSignal=SIGINT
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

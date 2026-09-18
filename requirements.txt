@@ -1,0 +1,5 @@
+numpy>=1.26
+aiohttp>=3.9
+opencv-python>=4.8
+pyrealsense2>=2.55
+pyserial>=3.5

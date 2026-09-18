@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically check the NXP Wi-Fi interface
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=nxp-wifi-recover.service
+
+[Install]
+WantedBy=timers.target
