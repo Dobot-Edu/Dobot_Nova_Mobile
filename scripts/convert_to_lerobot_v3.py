@@ -13,8 +13,8 @@ from pathlib import Path
 
 import cv2
 
-import constants as settings
-from lerobot_source import use_local_lerobot
+from config import dataset, paths
+from Dobot_Train.lerobot_source import use_local_lerobot
 from Dobot_Collection.schema import (
     ACTION_NAMES,
     STATE_NAMES,
@@ -90,11 +90,11 @@ def offline_dataset_class():
 
 
 def convert_dataset(
-    raw_root: Path = settings.RAW_ROOT,
-    output_root: Path = settings.LEROBOT_ROOT,
-    repo_id: str = settings.DATASET_REPO_ID,
+    raw_root: Path = paths.RAW_ROOT,
+    output_root: Path = paths.LEROBOT_ROOT,
+    repo_id: str = dataset.DATASET_REPO_ID,
     *,
-    use_videos: bool = settings.USE_VIDEOS,
+    use_videos: bool = dataset.USE_VIDEOS,
     video_batch_size: int = 1,
     image_writer_threads: int = 4,
     video_crf: float = 30,
@@ -160,7 +160,7 @@ def convert_dataset(
     }
     dataset = LeRobotDataset.create(
         repo_id=repo_id,
-        fps=settings.DATASET_FPS,
+        fps=dataset.DATASET_FPS,
         features=features,
         root=output_root,
         robot_type="dobot_nova_mobile_lift_vr",
@@ -171,7 +171,7 @@ def convert_dataset(
         encoder_queue_maxsize=encoder_queue_maxsize,
         batch_encoding_size=video_batch_size if use_videos else 1,
         video_backend="pyav",
-        rgb_encoder=RGBEncoderConfig(vcodec=settings.VIDEO_CODEC, crf=video_crf, preset=video_preset),
+        rgb_encoder=RGBEncoderConfig(vcodec=dataset.VIDEO_CODEC, crf=video_crf, preset=video_preset),
     )
 
     total_frames = 0
@@ -180,13 +180,13 @@ def convert_dataset(
         for output_index, episode in enumerate(episodes):
             metadata = json.loads((episode / "metadata.json").read_text(encoding="utf-8"))
             validate_training_metadata(metadata)
-            if int(metadata["fps"]) != settings.DATASET_FPS:
+            if int(metadata["fps"]) != dataset.DATASET_FPS:
                 raise ValueError(
-                    f"{episode.name} 的fps={metadata['fps']}，预期{settings.DATASET_FPS}"
+                    f"{episode.name} 的fps={metadata['fps']}，预期{dataset.DATASET_FPS}"
                 )
             source_task = str(metadata.get("task", ""))
-            if source_task != settings.TASK:
-                if not settings.RELABEL_TASK_DURING_CONVERSION:
+            if source_task != dataset.TASK:
+                if not dataset.RELABEL_TASK_DURING_CONVERSION:
                     raise ValueError(f"{episode.name} 的任务文字与TASK不一致")
                 relabeled_episodes += 1
                 print(f"[任务重标] {episode.name}: 使用 constants.TASK")
@@ -203,7 +203,7 @@ def convert_dataset(
                 frame = {
                     "observation.state": state,
                     "action": action,
-                    "task": settings.TASK,
+                    "task": dataset.TASK,
                 }
                 for camera in ("top", "wrist"):
                     image = cv2.imread(str(episode / row["images"][camera]), cv2.IMREAD_COLOR)
@@ -240,7 +240,7 @@ def convert_dataset(
 
     print(
         f"LeRobot Dataset v3.0完成：{output_root}\n"
-        f"episode={len(episodes)}, frames={total_frames}, fps={settings.DATASET_FPS}, "
+        f"episode={len(episodes)}, frames={total_frames}, fps={dataset.DATASET_FPS}, "
         f"task_relabeled={relabeled_episodes}"
     )
     return len(episodes), total_frames
@@ -248,9 +248,9 @@ def convert_dataset(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--raw-root", type=Path, default=settings.RAW_ROOT)
-    parser.add_argument("--output-root", type=Path, default=settings.LEROBOT_ROOT)
-    parser.add_argument("--repo-id", default=settings.DATASET_REPO_ID)
+    parser.add_argument("--raw-root", type=Path, default=paths.RAW_ROOT)
+    parser.add_argument("--output-root", type=Path, default=paths.LEROBOT_ROOT)
+    parser.add_argument("--repo-id", default=dataset.DATASET_REPO_ID)
     parser.add_argument("--video-batch-size", type=int, default=1, help="本地LeRobot使用1；更大值自动回退到1")
     parser.add_argument("--image-writer-threads", type=int, default=4)
     parser.add_argument("--video-crf", type=float, default=30)

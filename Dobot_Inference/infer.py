@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from Dobot_Inference import settings
+from config import inference as settings
 
 
 def restart_with_clean_cuda_environment() -> None:
@@ -85,7 +85,7 @@ from Dobot_Collection.devices import (  # noqa: E402
     TopHttpCamera,
     WristRealSense,
 )
-from Dobot_Init.robot import NovaRobot, controller_has_errors  # noqa: E402
+from Dobot_Init.robot import NovaRobot, RobotError, controller_has_errors  # noqa: E402
 
 
 STOP = threading.Event()
@@ -731,18 +731,20 @@ def terminal_phase_command() -> str | None:
 
 
 def choose_task(tasks: list[str], default_index: int) -> tuple[int, str] | None:
-    if len(tasks) == 1:
-        return None
     while not STOP.is_set():
         print("\n[阶段选择]")
         for index, task in enumerate(tasks, 1):
             marker = "（下一阶段）" if index - 1 == default_index else ""
             print(f"  {index}. {task}{marker}")
         try:
-            answer = input(
-                f"直接按 Enter 选择 {default_index + 1}；输入 1..{len(tasks)} 选择阶段；"
-                "输入 q 退出："
-            ).strip().lower()
+            if len(tasks) == 1:
+                prompt = "移除碰撞/障碍后，直接按 Enter 重新开始；输入 q 退出："
+            else:
+                prompt = (
+                    f"直接按 Enter 选择 {default_index + 1}；"
+                    f"输入 1..{len(tasks)} 选择阶段；输入 q 退出："
+                )
+            answer = input(prompt).strip().lower()
         except EOFError:
             return None
         if answer in {"q", "quit", "exit"}:
@@ -905,7 +907,7 @@ def run_task(
                         mode = robot.mode()
                         errors = robot.request("GetErrorID()")
                         if mode not in (5, 7) or controller_has_errors(errors):
-                            raise RuntimeError(
+                            raise RobotError(
                                 f"控制柜状态异常：mode={mode}, errors={errors.strip()}"
                             )
                         next_controller_status_check = tick_started + settings.CONTROLLER_STATUS_INTERVAL_S
@@ -957,9 +959,9 @@ def run_task(
         print(f"[完成] 阶段 {task_index + 1} 推理日志：{log_path}")
         return quit_requested, gripper_position
     finally:
-        # 阶段边界只停车和清空规划上下文，硬件连接及关节/夹爪状态保持。
+        # 阶段边界只发送零速度并清空规划上下文，控制会话保持可复用。
         try:
-            chassis.stop()
+            chassis.pause()
         finally:
             if planner is not None:
                 planner.close()
@@ -1055,29 +1057,69 @@ def run() -> int:
             print("[DRY-RUN] 不使能机械臂、夹爪或底盘，只记录预测动作")
 
         gripper_position = 1.0 if gripper is None else gripper.position
+        first_stage = True
+        needs_robot_recovery = False
         while not STOP.is_set():
-            quit_requested, gripper_position = run_task(
-                task_index=task_index,
-                task=task,
-                metadata=metadata,
-                limits=limits,
-                policy=policy,
-                preprocessor=preprocessor,
-                postprocessor=postprocessor,
-                sources=sources,
-                chassis=chassis,
-                robot=robot,
-                gripper=gripper,
-                gripper_position=gripper_position,
-                initial_latency_s=warmup_s,
-            )
-            if quit_requested or STOP.is_set() or len(tasks) == 1:
+            if not first_stage:
+                next_index = task_index if needs_robot_recovery else (task_index + 1) % len(tasks)
+                selected = choose_task(tasks, next_index)
+                if selected is None:
+                    break
+                task_index, task = selected
+
+            if settings.EXECUTE and robot is not None and needs_robot_recovery:
+                try:
+                    print("[机械臂恢复] 正在清除上一阶段报警并重新使能；不会自动运动……")
+                    robot.prepare_for_control()
+                    configure_robot_controller(robot)
+                    print("[机械臂恢复] 完成，可以开始新的推理阶段")
+                    needs_robot_recovery = False
+                except RobotError as error:
+                    print(
+                        f"[机械臂恢复失败] {error}\n"
+                        "请移除碰撞/障碍并检查机械臂状态，然后重新选择阶段；输入 q 可退出。",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    first_stage = False
+                    continue
+
+            try:
+                quit_requested, gripper_position = run_task(
+                    task_index=task_index,
+                    task=task,
+                    metadata=metadata,
+                    limits=limits,
+                    policy=policy,
+                    preprocessor=preprocessor,
+                    postprocessor=postprocessor,
+                    sources=sources,
+                    chassis=chassis,
+                    robot=robot,
+                    gripper=gripper,
+                    gripper_position=gripper_position,
+                    initial_latency_s=warmup_s,
+                )
+            except RobotError as error:
+                # 控制柜碰撞/报警或 ServoJ 拒绝只结束当前阶段。控制器负责制动；
+                # 此处再明确停止运动并保持模型、相机和程序常驻。
+                try:
+                    if robot is not None:
+                        robot.request("Stop()")
+                except Exception as stop_error:
+                    print(f"[机械臂停止失败] {stop_error}", file=sys.stderr, flush=True)
+                print(
+                    f"[阶段停止] 机械臂控制器异常：{error}\n"
+                    "当前推理阶段已结束，底盘已停车。程序保持运行。",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                needs_robot_recovery = True
+                quit_requested = False
+
+            first_stage = False
+            if quit_requested or STOP.is_set():
                 break
-            next_index = (task_index + 1) % len(tasks)
-            selected = choose_task(tasks, next_index)
-            if selected is None:
-                break
-            task_index, task = selected
         return 0
     finally:
         # 无论模型、CUDA、相机或机械臂哪里异常，底盘都先变成零速度。

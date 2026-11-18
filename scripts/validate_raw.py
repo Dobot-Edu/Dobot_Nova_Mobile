@@ -8,7 +8,7 @@ import json
 import cv2
 import numpy as np
 
-import constants as settings
+from config import dataset, devices, paths
 from Dobot_Collection.schema import (
     completed_episodes,
     episode_vectors,
@@ -20,7 +20,7 @@ from Dobot_Collection.schema import (
 def validate_episode(path) -> tuple[int, float]:
     metadata = json.loads((path / "metadata.json").read_text(encoding="utf-8"))
     validate_training_metadata(metadata)
-    if metadata.get("fps") != settings.DATASET_FPS or metadata.get("success") is not True:
+    if metadata.get("fps") != dataset.DATASET_FPS or metadata.get("success") is not True:
         raise ValueError(f"{path.name} 的fps或success错误")
 
     previous_wall_ns = 0
@@ -58,7 +58,7 @@ def validate_episode(path) -> tuple[int, float]:
         base = row["base_diagnostic"]
         base_ns = int(base["feedback_monotonic_ns"])
         age_s = float(base["feedback_age_s"])
-        if base_ns < previous_base_ns or not 0.0 <= age_s <= settings.BASE_ABORT_AGE_S:
+        if base_ns < previous_base_ns or not 0.0 <= age_s <= dataset.BASE_ABORT_AGE_S:
             raise ValueError(f"{path.name} 第{expected_index}帧底盘时间或年龄无效")
         if base_ns != previous_base_ns:
             base_updates += 1
@@ -70,7 +70,7 @@ def validate_episode(path) -> tuple[int, float]:
             gripper_age_s = float(gripper.get("feedback_age_s", float("inf")))
             if not bool(gripper.get("feedback_valid", False)):
                 raise ValueError(f"{path.name} 第{expected_index}帧夹爪编码器反馈无效")
-            if not 0.0 <= gripper_age_s <= settings.GRIPPER_FEEDBACK_ABORT_AGE_S:
+            if not 0.0 <= gripper_age_s <= devices.GRIPPER_FEEDBACK_ABORT_AGE_S:
                 raise ValueError(f"{path.name} 第{expected_index}帧夹爪反馈年龄无效")
             gripper_ns = int(gripper["feedback_monotonic_ns"])
             if gripper_ns < previous_gripper_ns:
@@ -83,22 +83,22 @@ def validate_episode(path) -> tuple[int, float]:
         for camera in ("top", "wrist"):
             image_path = path / row["images"][camera]
             image = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-            expected_shape = (settings.CAMERA_HEIGHT, settings.CAMERA_WIDTH, 3)
+            expected_shape = (devices.CAMERA_HEIGHT, devices.CAMERA_WIDTH, 3)
             if image is None or image.shape != expected_shape:
                 raise ValueError(f"{path.name} 第{expected_index}帧{camera}图像无效")
         frames += 1
 
-    if frames < settings.DATASET_FPS:
+    if frames < dataset.DATASET_FPS:
         raise ValueError(f"{path.name} 少于1秒：{frames}帧")
-    duration_s = frames / settings.DATASET_FPS
-    expected_period_s = 1.0 / settings.DATASET_FPS
+    duration_s = frames / dataset.DATASET_FPS
+    expected_period_s = 1.0 / dataset.DATASET_FPS
     if sample_intervals_s:
         min_interval_s = min(sample_intervals_s)
         max_interval_s = max(sample_intervals_s)
         measured_hz = (frames - 1) / sum(sample_intervals_s)
-        if not settings.DATASET_FPS * 0.98 <= measured_hz <= settings.DATASET_FPS * 1.02:
+        if not dataset.DATASET_FPS * 0.98 <= measured_hz <= dataset.DATASET_FPS * 1.02:
             raise ValueError(
-                f"{path.name} 实际采样率{measured_hz:.2f}Hz偏离配置{settings.DATASET_FPS}Hz"
+                f"{path.name} 实际采样率{measured_hz:.2f}Hz偏离配置{dataset.DATASET_FPS}Hz"
             )
         if min_interval_s < expected_period_s * 0.5 or max_interval_s > expected_period_s * 1.5:
             raise ValueError(
@@ -114,7 +114,7 @@ def validate_episode(path) -> tuple[int, float]:
             f"{path.name} 底盘反馈约{update_hz:.2f} Hz，"
             f"不在配置{expected_hz:g} Hz的容差范围"
         )
-    if max(ages) > settings.BASE_VALID_AGE_S + 0.05:
+    if max(ages) > dataset.BASE_VALID_AGE_S + 0.05:
         print(f"[警告] {path.name} 存在valid=0但尚未超时的底盘帧")
     gripper_text = ""
     if int(metadata.get("schema_version", 1)) >= 2:
@@ -135,8 +135,8 @@ def validate_episode(path) -> tuple[int, float]:
 
 
 def main() -> int:
-    all_completed = completed_episodes(settings.RAW_ROOT, successful_only=False)
-    successful = completed_episodes(settings.RAW_ROOT, successful_only=True)
+    all_completed = completed_episodes(paths.RAW_ROOT, successful_only=False)
+    successful = completed_episodes(paths.RAW_ROOT, successful_only=True)
     if not successful:
         raise SystemExit("没有可转换的成功episode")
     total_frames = 0

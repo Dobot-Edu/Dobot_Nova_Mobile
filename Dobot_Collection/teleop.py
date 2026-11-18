@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
 import socket
 import sys
 import time
@@ -13,7 +15,7 @@ from Dobot_Collection.session import CollectionSession
 
 import numpy as np
 
-import constants
+from config import dataset, devices, teleop
 
 from Dobot_Init.chassis import ChassisError, VRChassis, chassis_input_enabled
 from Dobot_Init.config import Config, load_config
@@ -38,9 +40,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Quest 3 右手柄遥操 Nova 从臂")
     parser.add_argument(
         "--profile",
-        choices=("full", "arm_only", "no_chassis"),
-        default=constants.TELEOP_PROFILE,
-        help="执行器组合；默认读取 constants.TELEOP_PROFILE",
+        choices=("full", "arm_only", "test"),
+        default=teleop.TELEOP_PROFILE,
+        help="执行器组合；默认读取 teleop.TELEOP_PROFILE",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--listen-only", action="store_true", help="只收 Quest，不连接机械臂")
@@ -50,7 +52,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dataset-telemetry-port",
         type=int,
-        default=constants.DATASET_TELEMETRY_PORT,
+        default=dataset.DATASET_TELEMETRY_PORT,
         help="向本机 UDP 端口发布数据集动作遥测；设为0可关闭",
     )
     parser.add_argument(
@@ -178,11 +180,14 @@ def control(
     dataset_double_click_window_s: float = 0.3,
     profile: str = "full",
 ) -> None:
-    if execute and profile in ("full", "arm_only") and dataset_telemetry_port != constants.DATASET_TELEMETRY_PORT:
-        raise ValueError("统一数采入口必须使用 constants.DATASET_TELEMETRY_PORT")
+    if execute and profile in ("full", "arm_only", "test") and dataset_telemetry_port != dataset.DATASET_TELEMETRY_PORT:
+        raise ValueError("统一数采入口必须使用 dataset.DATASET_TELEMETRY_PORT")
     transport = VRTransport(config)
     dataset_telemetry = DatasetTelemetryPublisher(dataset_telemetry_port)
-    buttons = ButtonRouter(profile == "no_chassis", dataset_double_click_window_s)
+    buttons = ButtonRouter(
+        window_s=dataset_double_click_window_s,
+        lift_controls=profile == "test",
+    )
     activated = False
     require_neutral = True
     robot: NovaRobot | None = None
@@ -194,8 +199,6 @@ def control(
     chassis: VRChassis | None = None
     failed = True
     arm_fault = None
-    maintenance_preview = None
-    maintenance_cameras = {}
 
     def set_indicator(color: LightColor) -> None:
         nonlocal indicator_available
@@ -207,7 +210,13 @@ def control(
             indicator_available = False
             print(f"[信号灯警告] {error}；本轮不再控制信号灯")
 
+    desktop = os.environ.get("NOVA_DESKTOP_SESSION")
+    desktop_dir = Path(desktop) if desktop else None
+
     def on_collection_state(state: str, _detail: str) -> None:
+        if desktop_dir is not None:
+            (desktop_dir / "state.tmp").write_text(state, encoding="ascii")
+            (desktop_dir / "state.tmp").replace(desktop_dir / "state")
         set_indicator(LightColor.RED if arm_fault else collection_state_color(state))
 
     def pause_arm(error):
@@ -249,15 +258,14 @@ def control(
 
         print("[待机] 确认工作区清空、急停可用后，单击 A 以当前位置开放遥操。")
         print("[按键] 初始化完成后先松开 Grip、让摇杆回中，并松开 A/B。")
-        if profile == "no_chassis":
-            print("[维护] 初始化后长按 A 上升、长按 B 下降；AB 同按停止，不采集。")
+        if profile == "test":
+            print("[TEST] B 短按开始/结束采集；双击 A 回标准位；长按 A/B 控制升/降。")
         else:
             print("[按键] B 开始/结束采集；双击 A 回标准位，录制继续。")
 
         def initialize():
             nonlocal snapshot, solver, last_command, estimated_pose
             nonlocal indicator_enabled
-            nonlocal maintenance_preview
             if execute:
                 if config.lift.enabled:
                     lift.connect(robot.digital_input)
@@ -285,20 +293,8 @@ def control(
             last_command = snapshot.joints_rad.copy()
             estimated_pose = snapshot.pose.copy()
             mapper.release()
-            if execute and profile in ("full", "arm_only"):
+            if execute and profile in ("full", "arm_only", "test"):
                 collection.start()
-            elif execute and profile == "no_chassis":
-                from Dobot_Init.camera_preview import CameraPreview
-                from Dobot_Collection.devices import TopHttpCamera, WristRealSense
-                maintenance_cameras.update(
-                    top=TopHttpCamera(constants.TOP_CAMERA_URL, constants.CAMERA_TIMEOUT_S),
-                    wrist=WristRealSense(constants.WRIST_CAMERA_SERIAL, constants.CAMERA_WIDTH,
-                                         constants.CAMERA_HEIGHT, constants.CAMERA_STREAM_FPS),
-                )
-                for source in maintenance_cameras.values():
-                    source.start()
-                maintenance_preview = CameraPreview(maintenance_cameras, 'Nova 维护遥操')
-                maintenance_preview.start()
             print(
                 "[遥操已激活] 已以机械臂当前位置为相对零点；"
                 "松开 Grip、摇杆回中、松开 A/B 后可操作；双击A才回标准位。"
@@ -360,6 +356,15 @@ def control(
             button_a = packet.button_a if packet is not None else False
             button_b = packet.button_b if packet is not None else False
             collection.poll()
+            if desktop_dir is not None:
+                request = desktop_dir / "command"
+                try:
+                    command = request.read_text(encoding="ascii")
+                except FileNotFoundError:
+                    pass
+                else:
+                    request.unlink()
+                    collection.request(command)
             # 阻塞初始化/回位后先丢掉积压包，并要求新的中立输入。
             if require_neutral and activated:
                 neutral = (packet_valid and not deadman and not button_a and not button_b
@@ -397,7 +402,7 @@ def control(
                                input_valid=controls_valid and not reset_requested)
                 # LiftColumn 仍使用内部 A+B=上升 的低层接口；手柄 AB 不直接透传。
                 lift.update_buttons(events.lift_up, events.lift_up or events.lift_down,
-                                    input_valid=controls_valid and profile == "no_chassis")
+                                    input_valid=controls_valid and profile == "test")
                 lift.check_error()
             chassis.update(packet.thumbstick_xy if packet else np.zeros(2),
                            input_valid=controls_valid and config.chassis.enabled
@@ -530,10 +535,6 @@ def control(
         if chassis is not None:
             chassis.close()
         collection.close()
-        if maintenance_preview is not None:
-            maintenance_preview.close()
-        for source in maintenance_cameras.values():
-            source.close()
         if gripper is not None:
             gripper.close()
         if lift is not None:

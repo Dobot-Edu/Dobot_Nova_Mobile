@@ -126,6 +126,29 @@ class InferenceChassis:
             self._desired = command
             self._last_command_at = time.monotonic()
 
+    def pause(self) -> None:
+        """阶段边界立即发送零速度，但保留控制会话供下一阶段继续使用。"""
+        with self._command_lock:
+            with self._lock:
+                if self._halted.is_set():
+                    return
+                enabled = self._enabled
+                self._desired[:] = 0.0
+                self._applied[:] = 0.0
+                # 暂停期间不启动命令超时；下一条策略命令会重新计时。
+                self._last_command_at = None
+            if enabled:
+                acknowledged = False
+                last_error = None
+                for _ in range(3):
+                    try:
+                        self.rpc.send_velocity(0, 0)
+                        acknowledged = True
+                    except Exception as error:
+                        last_error = error
+                if not acknowledged:
+                    raise RuntimeError(f"底盘阶段停车指令全部发送失败：{last_error}") from last_error
+
     def stop(self) -> None:
         """锁存停止，串行化正在发送的指令，然后直接发送零速度，不走减速积分。"""
         self._halted.set()

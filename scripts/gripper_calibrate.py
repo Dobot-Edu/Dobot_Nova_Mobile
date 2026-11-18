@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
                     print("端点方向异常：本夹爪应满足 open_raw > close_raw")
                 else:
                     print(
-                        "建议写入 constants.py：\n"
+                        "建议写入 config/：\n"
                         f"GRIPPER_RAW_OPEN = {open_endpoint[0]}\n"
                         f"GRIPPER_RAW_CLOSE = {close_endpoint[0]}\n"
                         "GRIPPER_MAX_CLOSE_COMMAND = 255\n"

@@ -504,7 +504,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chassis-ip", default=DEFAULT_CHASSIS_IP, help="只允许此底盘 IP 连接")
     parser.add_argument("--username", default=os.getenv("HUARUI_USERNAME", "admin"))
     parser.add_argument(
-        "--password", default=os.getenv("HUARUI_PASSWORD", ""), help="也可用 HUARUI_PASSWORD"
+        "--password", default=os.getenv("HUARUI_PASSWORD", "admin123456"), help="也可用 HUARUI_PASSWORD"
     )
     parser.add_argument("--protocol", choices=("auto", "v1", "v2"), default="auto")
     parser.add_argument("--connect-timeout", type=float, default=120.0)

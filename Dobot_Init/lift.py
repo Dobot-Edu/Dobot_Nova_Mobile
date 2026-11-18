@@ -82,9 +82,9 @@ def encode_height_cm(height_cm: float) -> tuple[int, int]:
 
 def decode_height_cm(low: int, high: int) -> float:
     """解码厘米高度；归一化设备在机械零点返回的两个已知原始值。"""
-    # 实机在最高点附近观察到 (0, 0) 和 (1, 0)。后者不是负高度，
-    # 不能套入原 Lua 的负数编码公式，否则会被误解码为几十万厘米。
-    if (low, high) in {(0, 0), (1, 0)}:
+    # Treat only observed near-zero positive counts as mechanical zero.
+    # Larger positive feedback values still fail the height range check.
+    if high == 0 and 0 <= low <= 3:
         return 0.0
     # Lua 计算得到 65536 时写入 U16 会在线路上变成 0，解码时还原该值。
     formula_low = 65536 if low == 0 else low

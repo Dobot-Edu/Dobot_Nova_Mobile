@@ -5,7 +5,7 @@ from pathlib import Path
 import queue
 import threading
 import time
-import constants
+from config import devices
 
 
 def desktop_environment():
@@ -63,7 +63,7 @@ def _window(frames, title):
                 delay = time.monotonic()-received
                 status.configure(text=f'Top帧龄 {ages[0]+delay:.2f}s | Wrist帧龄 {ages[1]+delay:.2f}s | 关闭窗口不停止程序',
                                  fg='red' if max(ages)+delay > .5 else 'black')
-            delay_ms = max(1, round((1 / constants.CAMERA_PREVIEW_FPS - (time.monotonic() - started)) * 1000))
+            delay_ms = max(1, round((1 / devices.CAMERA_PREVIEW_FPS - (time.monotonic() - started)) * 1000))
             root.after(delay_ms, refresh)
         refresh()
         root.mainloop()
@@ -81,7 +81,12 @@ class CameraPreview:
         self.title = title
 
     def start(self):
-        if not constants.CAMERA_PREVIEW_ENABLED:
+        desktop = os.environ.get('NOVA_DESKTOP_SESSION')
+        if desktop:
+            self.thread = threading.Thread(target=self._export, args=(Path(desktop),), daemon=True)
+            self.thread.start()
+            return
+        if not devices.CAMERA_PREVIEW_ENABLED:
             return
         try:
             context = mp.get_context('spawn')
@@ -93,21 +98,40 @@ class CameraPreview:
         except Exception as error:
             print(f'[相机预览不可用] {error}')
 
+    def _export(self, folder):
+        import cv2
+        while not self.stop.is_set():
+            for name in ('top', 'wrist'):
+                item = self.sources[name].latest.get()
+                if item is None:
+                    continue
+                path = folder / (name + '.png')
+                if time.monotonic() - item.monotonic > 0.5:
+                    path.unlink(missing_ok=True)
+                    continue
+                frame = cv2.resize(item.value, (420, 315))
+                ok, data = cv2.imencode('.png', frame, [cv2.IMWRITE_PNG_COMPRESSION, 1])
+                if ok:
+                    temporary = path.with_suffix('.tmp')
+                    temporary.write_bytes(data.tobytes())
+                    temporary.replace(path)
+            self.stop.wait(0.15)
+
     def _feed(self):
         import cv2
         while not self.stop.is_set() and self.process.is_alive():
             started = time.monotonic()
             items = [self.sources[k].latest.get() for k in ('top','wrist')]
             if any(x is None for x in items):
-                self.stop.wait(1 / constants.CAMERA_PREVIEW_FPS)
+                self.stop.wait(1 / devices.CAMERA_PREVIEW_FPS)
                 continue
             now = time.monotonic()
             try:
-                self.frames.put_nowait((*(cv2.resize(x.value,(constants.CAMERA_WIDTH, constants.CAMERA_HEIGHT)) for x in items),
+                self.frames.put_nowait((*(cv2.resize(x.value,(devices.CAMERA_WIDTH, devices.CAMERA_HEIGHT)) for x in items),
                                         [now-x.monotonic for x in items],now))
             except queue.Full:
                 pass
-            self.stop.wait(max(0, 1 / constants.CAMERA_PREVIEW_FPS - (time.monotonic() - started)))
+            self.stop.wait(max(0, 1 / devices.CAMERA_PREVIEW_FPS - (time.monotonic() - started)))
 
     def close(self):
         self.stop.set()

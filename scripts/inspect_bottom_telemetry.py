@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 
-import constants as settings
+from config import dataset, devices
 from Dobot_Collection.devices import TelemetryReceiver
 
 
@@ -14,8 +14,8 @@ MONITOR_SECONDS = 15.0
 
 def main() -> int:
     receiver = TelemetryReceiver(
-        settings.DATASET_TELEMETRY_HOST,
-        settings.DATASET_TELEMETRY_PORT,
+        dataset.DATASET_TELEMETRY_HOST,
+        dataset.DATASET_TELEMETRY_PORT,
     )
     receiver.start()
     started = time.monotonic()
@@ -56,7 +56,7 @@ def main() -> int:
         raise RuntimeError(f"有效底盘反馈不足：仅收到{updates}次更新")
     feedback_elapsed = (last_feedback_ns - first_feedback_ns) / 1e9
     update_hz = (updates - 1) / feedback_elapsed
-    expected_hz = settings.CHASSIS_FEEDBACK_RATE_HZ
+    expected_hz = devices.CHASSIS_FEEDBACK_RATE_HZ
     lower_hz = expected_hz * 0.70
     upper_hz = expected_hz * 1.20
     if not lower_hz <= update_hz <= upper_hz:

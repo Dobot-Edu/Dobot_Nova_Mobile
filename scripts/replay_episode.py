@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import constants
+from config import devices, paths
 from Dobot_Collection.schema import ACTION_NAMES, episode_vectors, read_jsonl
 from Dobot_Inference.chassis import InferenceChassis
 from Dobot_Init.chassis_rpc import DEFAULT_PASSWORD, DEFAULT_USERNAME
@@ -56,7 +56,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def resolve_episode(value: str | None, raw_root: Path = constants.RAW_ROOT) -> Path:
+def resolve_episode(value: str | None, raw_root: Path = paths.RAW_ROOT) -> Path:
     if value and value != "latest":
         candidate = Path(value).expanduser()
         if not candidate.is_absolute() and not candidate.is_dir():
@@ -153,10 +153,10 @@ def make_chassis(config) -> InferenceChassis:
         url=config.url,
         username=DEFAULT_USERNAME,
         password=DEFAULT_PASSWORD,
-        command_hz=constants.CHASSIS_COMMAND_RATE_HZ,
-        feedback_hz=constants.CHASSIS_FEEDBACK_RATE_HZ,
-        linear_limit_m_s=constants.CHASSIS_LINEAR_SPEED_MM_S / 1000.0,
-        angular_limit_rad_s=np.deg2rad(constants.CHASSIS_ANGULAR_SPEED_MDEG_S / 1000.0),
+        command_hz=devices.CHASSIS_COMMAND_RATE_HZ,
+        feedback_hz=devices.CHASSIS_FEEDBACK_RATE_HZ,
+        linear_limit_m_s=devices.CHASSIS_LINEAR_SPEED_MM_S / 1000.0,
+        angular_limit_rad_s=np.deg2rad(devices.CHASSIS_ANGULAR_SPEED_MDEG_S / 1000.0),
         # replay直接复现数据中的速度目标，不再额外施加推理阶段的加速度滤波。
         linear_acceleration_m_s2=1000.0,
         angular_acceleration_rad_s2=1000.0,

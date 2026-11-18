@@ -12,8 +12,9 @@ class ButtonEvents:
 
 
 class ButtonRouter:
-    def __init__(self, maintenance=False, window_s=0.3):
+    def __init__(self, maintenance=False, window_s=0.3, lift_controls=False):
         self.maintenance = maintenance
+        self.lift_controls = maintenance or lift_controls
         self.window_s = window_s
         self.reset()
 
@@ -33,13 +34,22 @@ class ButtonRouter:
                 self.armed = True
             return out
 
-        if self.maintenance and activated:
-            self.pending_a = None
-            self.a_at = (now if self.a_at is None else self.a_at) if a else None
-            self.b_at = (now if self.b_at is None else self.b_at) if b else None
+        if self.lift_controls and activated:
+            if a and self.a_at is None:
+                self.a_at = now
+            if b and self.b_at is None:
+                self.b_at = now
+                self.b_allowed = record_allowed
             out.lift_up = a and now - self.a_at >= self.window_s
             out.lift_down = b and now - self.b_at >= self.window_s
-            return out
+            if out.lift_up or out.lift_down:
+                self.pending_a = None
+            if self.maintenance:
+                if not a:
+                    self.a_at = None
+                if not b:
+                    self.b_at = None
+                return out
 
         if a and self.a_at is None:
             self.a_at = now

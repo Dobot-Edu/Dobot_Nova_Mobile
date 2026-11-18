@@ -43,9 +43,12 @@ class CollectionSession:
 
     def toggle(self):
         self.poll()
-        command = {'ready': 'start', 'recording': 'stop'}.get(self.state)
-        if command is None:
-            print(f'[数采] 当前状态 {self.state}，忽略 B；等待 ready/recording 提示')
+        self.request({'ready': 'start', 'recording': 'stop'}.get(self.state))
+
+    def request(self, command):
+        expected = {'ready': 'start', 'recording': 'stop'}.get(self.state)
+        if command is None or command != expected:
+            print(f'[数采] 当前状态 {self.state}，忽略录制请求；等待 ready/recording 提示')
             return
         try:
             self.pipe.send(command)

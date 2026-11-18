@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     lift: LiftColumn | None = None
     moving = False
     try:
-        config = load_config("no_chassis")
+        config = load_config("test")
         robot = NovaRobot(config.robot)
         client = ModbusTcpClient(
             config.lift.host,

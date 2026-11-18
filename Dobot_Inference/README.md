@@ -7,7 +7,7 @@
 - 输出：6关节目标角、夹爪连续目标位置、底盘目标线/角速度，共9维；
 - 升降台固定在 0.107 m，不进入该检查点的输入和输出；
 - 20 Hz 策略动作块、50 Hz 关节控制，新旧动作块进行平滑融合；
-- 默认只做 DRY-RUN，不使能任何执行器。
+- 默认进入真机执行模式。设置 `NOVA_EXECUTE=0` 可进入 DRY-RUN。
 
 旧 `dataset_meta/` 仅作为26K历史快照，不再被新版推理读取。新版默认从
 `datasets/lerobot/nova_pi05_mobile_position_v3/`读取元数据，也可以通过
@@ -16,7 +16,7 @@
 ## 准备环境
 
 ```bash
-cd /home/nvidia/dsw_ws/nova_vla/lerobot-main
+cd /home/nvidia/dsw_ws/nova_vla/Dobot_Train/lerobot-main
 uv sync --locked
 uv pip install --python .venv/bin/python -r ../requirements.txt
 ```
@@ -25,7 +25,7 @@ uv pip install --python .venv/bin/python -r ../requirements.txt
 
 ```bash
 cd /home/nvidia/dsw_ws/nova_vla
-lerobot-main/.venv/bin/python -m unittest Dobot_Inference.tests.test_control -v
+Dobot_Train/lerobot-main/.venv/bin/python -m unittest scripts.tests.inference.test_control -v
 ```
 
 ## 启动相机
@@ -34,7 +34,7 @@ lerobot-main/.venv/bin/python -m unittest Dobot_Inference.tests.test_control -v
 
 ```bash
 cd /home/nvidia/dsw_ws/nova_vla
-/home/nvidia/miniforge3/envs/single/bin/python -m Dobot_Init.top_camera --no-preview
+/home/nvidia/miniforge3/envs/nova/bin/python -m Dobot_Init.top_camera --no-preview
 ```
 
 保持该终端运行，并用下面命令检查：
@@ -49,7 +49,7 @@ curl -fsS http://127.0.0.1:8080/health
 
 ```bash
 cd /home/nvidia/dsw_ws/nova_vla
-NOVA_CHECKPOINT=/实际/检查点目录 bash run_inference.sh
+NOVA_EXECUTE=0 NOVA_CHECKPOINT=/实际/检查点目录 bash run_inference.sh
 ```
 
 DRY-RUN 会读取双相机和真机状态、加载权重并持续打印模型动作，但不会使能机械臂、

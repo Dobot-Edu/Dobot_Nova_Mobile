@@ -17,19 +17,19 @@
 直接转换：
 
 ```bash
-/home/nvidia/miniforge3/envs/single/bin/python -m scripts.convert_to_lerobot_v3
+/home/nvidia/miniforge3/envs/pi05-compat/bin/python -m scripts.convert_to_lerobot_v3
 ```
 
 检查最新一条轨迹但不连接硬件：
 
 ```bash
-/home/nvidia/miniforge3/envs/single/bin/python -m scripts.replay_episode latest
+/home/nvidia/miniforge3/envs/pi05-compat/bin/python -m scripts.replay_episode latest
 ```
 
 真机复现最新轨迹（需要输入 `REPLAY`，底盘切模式时还需按实体确认键）：
 
 ```bash
-/home/nvidia/miniforge3/envs/single/bin/python -m scripts.replay_episode latest --execute
+/home/nvidia/miniforge3/envs/pi05-compat/bin/python -m scripts.replay_episode latest --execute
 ```
 
 请在工程根目录使用 `python -m scripts.模块名` 运行；这些工具不是自动测试。
@@ -38,8 +38,8 @@
 DO6为红色、DO7为绿色、DO8为黄色。独立实机测试位于 `scripts/indicator_light.py`。
 
 转换仅接受原始 `schema_version=2`、9维状态和9维动作，夹爪0开1闭。
-转换和训练使用工程内 `lerobot-main/src`；默认CPU H.264编码MP4。
-视频回归测试：`python -m unittest tests.pipeline.test_pipeline`，包含MP4编码和LeRobot回读。
+转换和训练使用工程内 `Dobot_Train/lerobot-main/src`；默认CPU H.264编码MP4。
+视频回归测试：`python -m unittest scripts.tests.pipeline.test_pipeline`，包含MP4编码和LeRobot回读。
 
 ### 快速转换
 
@@ -56,7 +56,7 @@ CPU H.264 preset为fast、CRF为30。当前本地LeRobot的跨episode批量路�
 python -m scripts.convert_to_lerobot_v3 --video-preset fast
 ```
 
-路径默认读取constants.py，也可用`--raw-root`、`--output-root`、`--repo-id`覆盖。
+路径默认读取config/，也可用`--raw-root`、`--output-root`、`--repo-id`覆盖。
 直接写入输出目录，已有目录不覆盖；失败后需人工移走未完成输出或更换路径重跑。
 
 ### 流式编码提速

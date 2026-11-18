@@ -26,7 +26,7 @@ from typing import Any, Callable
 
 DEFAULT_URL = "http://192.168.23.1"
 DEFAULT_USERNAME = os.getenv("HUARUI_WEB_USERNAME", "admin")
-DEFAULT_PASSWORD = os.getenv("HUARUI_WEB_PASSWORD", "")
+DEFAULT_PASSWORD = os.getenv("HUARUI_WEB_PASSWORD", "admin123456")
 REMOTE_MODE = 3  # 地图实验室打开 AMR 操控窗口时使用的模式
 TASK_MODE = 0
 ALLOWED_REMOTE_EXTRA_FIRST = 1 << 20  # 非任务模式；遥控模式下属于预期状态

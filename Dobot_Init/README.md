@@ -1,7 +1,7 @@
 # Dobot_Init
 
 本目录只保存硬件初始化和底层控制：Nova Dashboard、标准位回位、夹爪、升降台、
-底盘 RPC、安全约束和相机。所有可调值统一来自根目录 `constants.py`。
+底盘 RPC、安全约束和相机。所有可调值统一来自根目录 `config/`。
 
 只执行机械臂报警检查、使能和标准位初始化：
 
@@ -14,7 +14,7 @@ python -m Dobot_Init.startup_pose
 机械臂信号灯使用控制柜数字输出：DO6红、DO7绿、DO8黄。独立测试命令：
 
 ```bash
-/home/nvidia/miniforge3/envs/single/bin/python \
+/home/nvidia/miniforge3/envs/pi05-compat/bin/python \
   -m tests.hardware.indicator_light --execute
 ```
 
@@ -29,7 +29,7 @@ python -m Dobot_Init.startup_pose
 继续。先停止遥操，再使用单次回零工具：
 
 ```bash
-/home/nvidia/miniforge3/envs/single/bin/python -m tests.hardware.lift_home --execute
+/home/nvidia/miniforge3/envs/pi05-compat/bin/python -m tests.hardware.lift_home --execute
 ```
 
 现场输入 `HOME` 后才会向上运动，并在 DI2 最高限位触发后停止。不要通过允许负位置

@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# π0.5 推理入口。默认只读；真机执行必须显式设置 NOVA_EXECUTE=1。
+# π0.5 推理入口。默认真机执行。设置 NOVA_EXECUTE=0 进入 DRY-RUN。
 
 _nova_inference_main() (
   set -euo pipefail
   root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+  source "$root/config/runtime.env"
 
   if [[ -n "${NOVA_INFERENCE_PYTHON:-}" ]]; then
     python_bin=$NOVA_INFERENCE_PYTHON
   else
     python_bin=""
     for candidate in \
-      /home/nvidia/miniforge3/envs/single/bin/python \
+      "$NOVA_BOARD_PYTHON" \
       /root/miniforge3/envs/dobot-lerobot/bin/python \
-      "$root/lerobot-main/.venv/bin/python"; do
+      "$root/Dobot_Train/lerobot-main/.venv/bin/python"; do
       if [[ -x "$candidate" ]]; then
         python_bin=$candidate
         break
@@ -25,7 +26,7 @@ _nova_inference_main() (
     exit 2
   fi
 
-  export NOVA_EXECUTE=${NOVA_EXECUTE:-0}
+  export NOVA_EXECUTE=${NOVA_EXECUTE:-$NOVA_INFERENCE_EXECUTE_DEFAULT}
   export HF_HUB_OFFLINE=1
   export TRANSFORMERS_OFFLINE=1
   export TOKENIZERS_PARALLELISM=false
@@ -39,7 +40,7 @@ _nova_inference_main() (
 
   cd "$root"
   readarray -t resolved_paths < <(
-    "$python_bin" -c 'from Dobot_Inference import settings; print(settings.CHECKPOINT_DIR); print(settings.resolve_dataset_meta_root())'
+    "$python_bin" -c 'from config import inference as settings; print(settings.CHECKPOINT_DIR); print(settings.resolve_dataset_meta_root())'
   )
   echo "[启动] 模式：$mode"
   echo "[启动] Python：$python_bin"
@@ -59,7 +60,7 @@ _nova_inference_main() (
   trap 'exit 143' TERM
 
   camera_ready() {
-    "$python_bin" -c 'import json, urllib.request; from Dobot_Inference import settings; url = settings.TOP_CAMERA_URL.rsplit("/", 1)[0] + "/health"; response = urllib.request.urlopen(url, timeout=1); raise SystemExit(0 if json.load(response).get("ok") else 1)' 2>/dev/null
+    "$python_bin" -c 'import json, urllib.request; from config import inference as settings; url = settings.TOP_CAMERA_URL.rsplit("/", 1)[0] + "/health"; response = urllib.request.urlopen(url, timeout=1); raise SystemExit(0 if json.load(response).get("ok") else 1)' 2>/dev/null
   }
 
   if camera_ready; then

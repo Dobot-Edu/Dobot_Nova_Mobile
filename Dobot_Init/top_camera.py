@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
-import constants
+from config import dataset, devices
 
 
 @dataclass(frozen=True)
@@ -77,17 +77,17 @@ class ViewerStats:
 
 
 def load_camera_config() -> CameraConfig:
-    """从根目录 ``constants.py`` 读取 Top 相机配置。"""
+    """从根目录 ``config/`` 读取 Top 相机配置。"""
     result = CameraConfig(
-        serial=constants.TOP_CAMERA_SERIAL,
-        width=constants.CAMERA_WIDTH,
-        height=constants.CAMERA_HEIGHT,
-        fps=constants.CAMERA_STREAM_FPS,
-        jpeg_quality=constants.JPEG_QUALITY,
-        listen_host=constants.TOP_CAMERA_LISTEN_HOST,
-        http_port=constants.TOP_CAMERA_HTTP_PORT,
-        preview=constants.TOP_CAMERA_PREVIEW,
-        window_name=constants.TOP_CAMERA_WINDOW_NAME,
+        serial=devices.TOP_CAMERA_SERIAL,
+        width=devices.CAMERA_WIDTH,
+        height=devices.CAMERA_HEIGHT,
+        fps=devices.CAMERA_STREAM_FPS,
+        jpeg_quality=dataset.JPEG_QUALITY,
+        listen_host=devices.TOP_CAMERA_LISTEN_HOST,
+        http_port=devices.TOP_CAMERA_HTTP_PORT,
+        preview=devices.TOP_CAMERA_PREVIEW,
+        window_name=devices.TOP_CAMERA_WINDOW_NAME,
     )
     if not result.serial:
         raise ValueError("top_serial 不能为空")

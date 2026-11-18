@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from Dobot_Collection.schema import ACTION_NAMES, STATE_NAMES, episode_vectors, read_jsonl
-from Dobot_Inference import settings
+from config import inference as settings
 
 if str(settings.LEROBOT_SOURCE) not in sys.path:
     sys.path.insert(0, str(settings.LEROBOT_SOURCE))

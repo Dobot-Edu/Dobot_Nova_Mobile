@@ -7,15 +7,3 @@ outputs/*
 datasets/raw/*
 datasets/lerobot/*
 datasets/excluded/*
-backups/
-*.log
-*.apk
-*.safetensors
-*.ckpt
-*.pt
-*.pth
-*.onnx
-build/
-dist/
-*.egg-info/
-Dobot_Inference/dataset_meta/

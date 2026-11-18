@@ -13,7 +13,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-import constants as settings
+from config import dataset, devices, paths
 from Dobot_Init.camera_preview import CameraPreview
 from Dobot_Collection.devices import (
     DobotFeedback,
@@ -57,17 +57,17 @@ def read_command(connection):
 
 def make_sources() -> dict:
     return {
-        "feedback": DobotFeedback(settings.ROBOT_IP, settings.ROBOT_FEEDBACK_PORT),
-        "top": TopHttpCamera(settings.TOP_CAMERA_URL, settings.CAMERA_TIMEOUT_S),
+        "feedback": DobotFeedback(devices.ROBOT_IP, devices.ROBOT_FEEDBACK_PORT),
+        "top": TopHttpCamera(devices.TOP_CAMERA_URL, dataset.CAMERA_TIMEOUT_S),
         "wrist": WristRealSense(
-            settings.WRIST_CAMERA_SERIAL,
-            settings.CAMERA_WIDTH,
-            settings.CAMERA_HEIGHT,
-            settings.CAMERA_STREAM_FPS,
+            devices.WRIST_CAMERA_SERIAL,
+            devices.CAMERA_WIDTH,
+            devices.CAMERA_HEIGHT,
+            devices.CAMERA_STREAM_FPS,
         ),
         "telemetry": TelemetryReceiver(
-            settings.DATASET_TELEMETRY_HOST,
-            settings.DATASET_TELEMETRY_PORT,
+            dataset.DATASET_TELEMETRY_HOST,
+            dataset.DATASET_TELEMETRY_PORT,
         ),
     }
 
@@ -90,36 +90,36 @@ def wait_until_ready(sources: dict, timeout_s: float = 20.0) -> None:
 
 def record_episode(sources: dict, connection) -> tuple[Path, int, bool]:
     stem = datetime.now().strftime("episode_%Y%m%d_%H%M%S_%f")
-    partial = settings.RAW_ROOT / f".{stem}.partial"
-    final = settings.RAW_ROOT / stem
+    partial = paths.RAW_ROOT / f".{stem}.partial"
+    final = paths.RAW_ROOT / stem
     for camera in IMAGE_KEYS:
         (partial / "images" / camera).mkdir(parents=True, exist_ok=True)
 
     metadata = {
         "schema_version": 2,
         "lerobot_target_version": "v3.0",
-        "task": settings.TASK,
-        "fps": settings.DATASET_FPS,
+        "task": dataset.TASK,
+        "fps": dataset.DATASET_FPS,
         "state_names": STATE_NAMES,
         "action_names": ACTION_NAMES,
         "image_keys": list(IMAGE_KEYS),
         "units": "SI: rad, m, m/s, rad/s; gripper position is 1=open, 0=closed",
         "base_alignment": {
-            "feedback_hz": settings.CHASSIS_FEEDBACK_RATE_HZ,
+            "feedback_hz": devices.CHASSIS_FEEDBACK_RATE_HZ,
             "method": "causal_zero_order_hold",
-            "valid_age_s": settings.BASE_VALID_AGE_S,
-            "abort_age_s": settings.BASE_ABORT_AGE_S,
+            "valid_age_s": dataset.BASE_VALID_AGE_S,
+            "abort_age_s": dataset.BASE_ABORT_AGE_S,
         },
         "gripper_alignment": {
-            "feedback_hz": 1.0 / settings.GRIPPER_FEEDBACK_INTERVAL_S,
+            "feedback_hz": 1.0 / devices.GRIPPER_FEEDBACK_INTERVAL_S,
             "observation_source": "servo_encoder",
             "position_semantics": "1=open, 0=closed within configured safe travel",
             "open_is_one": True,
-            "valid_age_s": settings.GRIPPER_FEEDBACK_VALID_AGE_S,
-            "abort_age_s": settings.GRIPPER_FEEDBACK_ABORT_AGE_S,
+            "valid_age_s": devices.GRIPPER_FEEDBACK_VALID_AGE_S,
+            "abort_age_s": devices.GRIPPER_FEEDBACK_ABORT_AGE_S,
         },
         "fixed_lift": {
-            "height_m": settings.FIXED_LIFT_HEIGHT_M,
+            "height_m": dataset.FIXED_LIFT_HEIGHT_M,
             "included_in_policy": False,
             "reason": "物理高度固定；编码器绝对零点不可靠",
         },
@@ -128,7 +128,7 @@ def record_episode(sources: dict, connection) -> tuple[Path, int, bool]:
     metadata_path = partial / "metadata.json"
     metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    period_s = 1.0 / settings.DATASET_FPS
+    period_s = 1.0 / dataset.DATASET_FPS
     started = time.monotonic()
     frame_count = 0
     end_reason = "right_B_click"
@@ -149,29 +149,29 @@ def record_episode(sources: dict, connection) -> tuple[Path, int, bool]:
             sample_monotonic_ns = time.monotonic_ns()
 
             feedback_item = require_fresh(
-                sources["feedback"], "机械臂反馈", settings.ROBOT_FEEDBACK_TIMEOUT_S
+                sources["feedback"], "机械臂反馈", dataset.ROBOT_FEEDBACK_TIMEOUT_S
             )
-            top_item = require_fresh(sources["top"], "Top相机", settings.CAMERA_TIMEOUT_S)
-            wrist_item = require_fresh(sources["wrist"], "腕部相机", settings.CAMERA_TIMEOUT_S)
+            top_item = require_fresh(sources["top"], "Top相机", dataset.CAMERA_TIMEOUT_S)
+            wrist_item = require_fresh(sources["wrist"], "腕部相机", dataset.CAMERA_TIMEOUT_S)
             telemetry_item = require_fresh(
-                sources["telemetry"], "VR遥测", settings.TELEMETRY_TIMEOUT_S
+                sources["telemetry"], "VR遥测", dataset.TELEMETRY_TIMEOUT_S
             )
             telemetry = telemetry_item.value
             state, action, base, gripper_diagnostic = build_vectors(
                 feedback_item.value["actual_deg"],
                 telemetry,
                 sample_monotonic_ns,
-                base_valid_age_s=settings.BASE_VALID_AGE_S,
-                gripper_valid_age_s=settings.GRIPPER_FEEDBACK_VALID_AGE_S,
+                base_valid_age_s=dataset.BASE_VALID_AGE_S,
+                gripper_valid_age_s=devices.GRIPPER_FEEDBACK_VALID_AGE_S,
             )
-            if base["feedback_age_s"] > settings.BASE_ABORT_AGE_S:
+            if base["feedback_age_s"] > dataset.BASE_ABORT_AGE_S:
                 raise RuntimeError(
                     f"底盘反馈已中断{base['feedback_age_s']:.3f}s，超过安全阈值，停止采集"
                 )
             if base["feedback_monotonic_ns"] != previous_base_timestamp:
                 base_feedback_updates += 1
                 previous_base_timestamp = base["feedback_monotonic_ns"]
-            if gripper_diagnostic["feedback_age_s"] > settings.GRIPPER_FEEDBACK_ABORT_AGE_S:
+            if gripper_diagnostic["feedback_age_s"] > devices.GRIPPER_FEEDBACK_ABORT_AGE_S:
                 raise RuntimeError(
                     f"夹爪反馈已中断{gripper_diagnostic['feedback_age_s']:.3f}s，"
                     "超过安全阈值，停止采集"
@@ -184,10 +184,10 @@ def record_episode(sources: dict, connection) -> tuple[Path, int, bool]:
             for camera, item in (("top", top_item), ("wrist", wrist_item)):
                 relative = Path("images") / camera / f"{index:06d}.jpg"
                 image = item.value
-                if image.shape != (settings.CAMERA_HEIGHT, settings.CAMERA_WIDTH, 3):
+                if image.shape != (devices.CAMERA_HEIGHT, devices.CAMERA_WIDTH, 3):
                     raise RuntimeError(f"{camera}图像尺寸异常：{image.shape}")
                 if not cv2.imwrite(
-                    str(partial / relative), image, [cv2.IMWRITE_JPEG_QUALITY, settings.JPEG_QUALITY]
+                    str(partial / relative), image, [cv2.IMWRITE_JPEG_QUALITY, dataset.JPEG_QUALITY]
                 ):
                     raise RuntimeError(f"写入{camera}图像失败")
                 image_paths[camera] = relative.as_posix()
@@ -213,7 +213,7 @@ def record_episode(sources: dict, connection) -> tuple[Path, int, bool]:
             stream.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
             frame_count = index + 1
 
-            if frame_count % settings.DATASET_FPS == 0:
+            if frame_count % dataset.DATASET_FPS == 0:
                 elapsed = time.monotonic() - started
                 print(
                     f"已录制 {elapsed:.0f}s；"
@@ -242,17 +242,17 @@ def record_episode(sources: dict, connection) -> tuple[Path, int, bool]:
 
 
 def check_sources_ready(sources):
-    feedback = require_fresh(sources["feedback"], "机械臂", settings.ROBOT_FEEDBACK_TIMEOUT_S)
-    require_fresh(sources["top"], "Top", settings.CAMERA_TIMEOUT_S)
-    require_fresh(sources["wrist"], "Wrist", settings.CAMERA_TIMEOUT_S)
-    telemetry = require_fresh(sources["telemetry"], "遥测", settings.TELEMETRY_TIMEOUT_S).value
+    feedback = require_fresh(sources["feedback"], "机械臂", dataset.ROBOT_FEEDBACK_TIMEOUT_S)
+    require_fresh(sources["top"], "Top", dataset.CAMERA_TIMEOUT_S)
+    require_fresh(sources["wrist"], "Wrist", dataset.CAMERA_TIMEOUT_S)
+    telemetry = require_fresh(sources["telemetry"], "遥测", dataset.TELEMETRY_TIMEOUT_S).value
     _, _, base, gripper = build_vectors(
         feedback.value["actual_deg"], telemetry, time.monotonic_ns(),
-        base_valid_age_s=settings.BASE_VALID_AGE_S,
-        gripper_valid_age_s=settings.GRIPPER_FEEDBACK_VALID_AGE_S)
-    if base["feedback_age_s"] > settings.BASE_ABORT_AGE_S:
+        base_valid_age_s=dataset.BASE_VALID_AGE_S,
+        gripper_valid_age_s=devices.GRIPPER_FEEDBACK_VALID_AGE_S)
+    if base["feedback_age_s"] > dataset.BASE_ABORT_AGE_S:
         raise RuntimeError("底盘反馈过期")
-    if gripper["feedback_age_s"] > settings.GRIPPER_FEEDBACK_ABORT_AGE_S:
+    if gripper["feedback_age_s"] > devices.GRIPPER_FEEDBACK_ABORT_AGE_S:
         raise RuntimeError("夹爪反馈过期")
 
 
@@ -262,7 +262,7 @@ def run_session(connection):
     sources = {}
     preview = None
     try:
-        settings.RAW_ROOT.mkdir(parents=True, exist_ok=True)
+        paths.RAW_ROOT.mkdir(parents=True, exist_ok=True)
         sources = make_sources()
         for source in sources.values():
             source.start()
@@ -296,7 +296,7 @@ def run_session(connection):
 
 
 def main() -> int:
-    print("采集已整合到 run_teleop.sh；请启动 full/arm_only，单击 A 初始化，B 开始/结束采集。")
+    print("采集已整合到 run_teleop.sh；请启动 full/arm_only/test，单击 A 初始化，B 开始/结束采集。")
     return 0
 
 

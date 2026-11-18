@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 # 一键启动 Top 相机和 VR 遥操。
-# 用法：bash run_teleop.sh [full|arm_only|no_chassis]
+# 用法：bash run_teleop.sh [full|arm_only|test]
 
 _nova_teleop_main() (
   set -euo pipefail
 
   root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+  source "$root/config/runtime.env"
   profile=${1:-full}
-  python_bin=${NOVA_PYTHON:-/home/nvidia/miniforge3/envs/single/bin/python}
+  python_bin=${NOVA_PYTHON:-$NOVA_BOARD_PYTHON}
 
   case "$profile" in
-    full|arm_only|no_chassis) ;;
+    full|arm_only|test) ;;
     *)
-      echo "模式必须是 full、arm_only 或 no_chassis，实际为：$profile" >&2
+      echo "模式必须是 full、arm_only、test，实际为：$profile" >&2
       return 2
       ;;
   esac
@@ -33,8 +34,10 @@ _nova_teleop_main() (
   }
   trap cleanup EXIT INT TERM
 
+  top_health_url=$("$python_bin" -c 'from config.devices import TOP_CAMERA_URL; print(TOP_CAMERA_URL.rsplit("/", 1)[0] + "/health")')
+
   camera_ready() {
-    curl -fsS --max-time 1 http://127.0.0.1:8080/health 2>/dev/null \
+    curl -fsS --max-time 1 "$top_health_url" 2>/dev/null \
       | grep -Eq '"ok"[[:space:]]*:[[:space:]]*true'
   }
 

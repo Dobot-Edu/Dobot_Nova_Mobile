@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import constants
+from config import dataset, devices
 
 
 @dataclass(frozen=True)
@@ -29,17 +29,17 @@ class DualCameraConfig:
 
 
 def load_dual_camera_config() -> DualCameraConfig:
-    """从根目录 ``constants.py`` 读取双相机查看器配置。"""
+    """从根目录 ``config/`` 读取双相机查看器配置。"""
     result = DualCameraConfig(
-        top_serial=constants.TOP_CAMERA_SERIAL,
-        wrist_serial=constants.WRIST_CAMERA_SERIAL,
-        width=constants.CAMERA_WIDTH,
-        height=constants.CAMERA_HEIGHT,
-        fps=constants.CAMERA_STREAM_FPS,
-        jpeg_quality=constants.JPEG_QUALITY,
-        top_http_port=constants.TOP_CAMERA_HTTP_PORT,
-        viewer_host=constants.DUAL_VIEWER_HOST,
-        viewer_port=constants.DUAL_VIEWER_PORT,
+        top_serial=devices.TOP_CAMERA_SERIAL,
+        wrist_serial=devices.WRIST_CAMERA_SERIAL,
+        width=devices.CAMERA_WIDTH,
+        height=devices.CAMERA_HEIGHT,
+        fps=devices.CAMERA_STREAM_FPS,
+        jpeg_quality=dataset.JPEG_QUALITY,
+        top_http_port=devices.TOP_CAMERA_HTTP_PORT,
+        viewer_host=devices.DUAL_VIEWER_HOST,
+        viewer_port=devices.DUAL_VIEWER_PORT,
     )
     if not result.top_serial or not result.wrist_serial:
         raise ValueError("top_serial 和 wrist_serial 均不能为空")

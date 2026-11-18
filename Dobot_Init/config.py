@@ -1,4 +1,4 @@
-"""把根目录 ``constants.py`` 转成强类型硬件配置并执行校验。"""
+"""把根目录 ``config/`` 转成强类型硬件配置并执行校验。"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-import constants
+from config import dataset, devices, teleop
 
 
 @dataclass(frozen=True)
@@ -133,111 +133,109 @@ def load_config(profile: str | None = None) -> Config:
     """构造运行配置。
 
     ``profile`` 只决定哪些执行器启用，所有数值参数均来自根目录
-    ``constants.py``，避免多个 INI 文件长期漂移。
+    ``config/``，避免多个 INI 文件长期漂移。
     """
-    profile = profile or constants.TELEOP_PROFILE
+    profile = profile or teleop.TELEOP_PROFILE
     profiles = {
         # 训练/部署任务固定升降台；full 不允许 A/B 误触改变高度。
-        "full": (True, not constants.FIXED_LIFT_FOR_POLICY, True),
+        "full": (True, not dataset.FIXED_LIFT_FOR_POLICY, True),
         "arm_only": (True, False, False),
-        "no_chassis": (True, True, False),
+        # 临时展示模式：full 的全部功能，加上 A/B 长按升降台控制。
+        "test": (True, True, True),
     }
     if profile not in profiles:
         raise ValueError(f"未知遥操模式 {profile!r}，应为 {', '.join(profiles)}")
     gripper_enabled, lift_enabled, chassis_enabled = profiles[profile]
     result = Config(
         network=NetworkConfig(
-            listen_host=constants.QUEST_LISTEN_HOST,
-            data_port=constants.QUEST_DATA_PORT,
-            discovery_port=constants.QUEST_DISCOVERY_PORT,
-            allowed_quest_ip=constants.QUEST_ALLOWED_IP,
-            allowed_quest_subnet=constants.QUEST_ALLOWED_SUBNET,
-            packet_timeout_s=constants.QUEST_PACKET_TIMEOUT_S,
-            deadman_grip_threshold=constants.QUEST_DEADMAN_GRIP_THRESHOLD,
+            listen_host=devices.QUEST_LISTEN_HOST,
+            data_port=devices.QUEST_DATA_PORT,
+            discovery_port=devices.QUEST_DISCOVERY_PORT,
+            allowed_quest_ip=devices.QUEST_ALLOWED_IP,
+            allowed_quest_subnet=devices.QUEST_ALLOWED_SUBNET,
+            packet_timeout_s=devices.QUEST_PACKET_TIMEOUT_S,
+            deadman_grip_threshold=devices.QUEST_DEADMAN_GRIP_THRESHOLD,
         ),
         robot=RobotConfig(
-            ip=constants.ROBOT_IP,
-            dashboard_port=constants.ROBOT_DASHBOARD_PORT,
-            rate_hz=constants.ROBOT_CONTROL_HZ,
-            speed_factor=constants.ROBOT_SPEED_FACTOR,
-            max_joint_speed_deg_s=constants.ROBOT_MAX_JOINT_SPEED_DEG_S,
-            max_tcp_speed_mm_s=constants.ROBOT_MAX_TCP_SPEED_MM_S,
-            max_tcp_rotation_deg_s=constants.ROBOT_MAX_TCP_ROTATION_DEG_S,
-            auto_clear_error=constants.ROBOT_AUTO_CLEAR_ERROR,
-            # 兼容 constants.py 被旧副本局部覆盖的情况；新工程默认开启恢复。
-            auto_recover_manual_mode=getattr(
-                constants, "ROBOT_AUTO_RECOVER_MANUAL_MODE", True
-            ),
-            startup_pose_enabled=constants.STARTUP_POSE_ENABLED,
-            startup_joint_deg=_vector(constants.STARTUP_JOINT_DEG, 6),
-            startup_speed_factor=constants.STARTUP_SPEED_FACTOR,
-            startup_tolerance_deg=constants.STARTUP_TOLERANCE_DEG,
-            startup_timeout_s=constants.STARTUP_TIMEOUT_S,
+            ip=devices.ROBOT_IP,
+            dashboard_port=devices.ROBOT_DASHBOARD_PORT,
+            rate_hz=devices.ROBOT_CONTROL_HZ,
+            speed_factor=devices.ROBOT_SPEED_FACTOR,
+            max_joint_speed_deg_s=devices.ROBOT_MAX_JOINT_SPEED_DEG_S,
+            max_tcp_speed_mm_s=devices.ROBOT_MAX_TCP_SPEED_MM_S,
+            max_tcp_rotation_deg_s=devices.ROBOT_MAX_TCP_ROTATION_DEG_S,
+            auto_clear_error=devices.ROBOT_AUTO_CLEAR_ERROR,
+            auto_recover_manual_mode=devices.ROBOT_AUTO_RECOVER_MANUAL_MODE,
+            startup_pose_enabled=devices.STARTUP_POSE_ENABLED,
+            startup_joint_deg=_vector(devices.STARTUP_JOINT_DEG, 6),
+            startup_speed_factor=devices.STARTUP_SPEED_FACTOR,
+            startup_tolerance_deg=devices.STARTUP_TOLERANCE_DEG,
+            startup_timeout_s=devices.STARTUP_TIMEOUT_S,
         ),
         mapping=MappingConfig(
-            position_axis=np.asarray(constants.POSITION_AXIS, dtype=float),
-            position_scale=constants.POSITION_SCALE,
-            orientation_axis=np.asarray(constants.ORIENTATION_AXIS, dtype=float),
-            max_translation_mm=constants.MAX_TRANSLATION_MM,
-            max_rotation_deg=constants.MAX_ROTATION_DEG,
-            max_packet_translation_mm=constants.MAX_PACKET_TRANSLATION_MM,
-            max_packet_rotation_deg=constants.MAX_PACKET_ROTATION_DEG,
+            position_axis=np.asarray(teleop.POSITION_AXIS, dtype=float),
+            position_scale=teleop.POSITION_SCALE,
+            orientation_axis=np.asarray(teleop.ORIENTATION_AXIS, dtype=float),
+            max_translation_mm=teleop.MAX_TRANSLATION_MM,
+            max_rotation_deg=teleop.MAX_ROTATION_DEG,
+            max_packet_translation_mm=teleop.MAX_PACKET_TRANSLATION_MM,
+            max_packet_rotation_deg=teleop.MAX_PACKET_ROTATION_DEG,
         ),
         gripper=GripperConfig(
             enabled=gripper_enabled,
-            port=constants.GRIPPER_PORT,
-            servo_id=constants.GRIPPER_SERVO_ID,
-            raw_open=constants.GRIPPER_RAW_OPEN,
-            raw_close=constants.GRIPPER_RAW_CLOSE,
-            max_close_command=constants.GRIPPER_MAX_CLOSE_COMMAND,
-            feedback_raw_open=constants.GRIPPER_FEEDBACK_RAW_OPEN,
-            feedback_raw_close=constants.GRIPPER_FEEDBACK_RAW_CLOSE,
-            speed=constants.GRIPPER_SPEED,
-            target_torque=constants.GRIPPER_TARGET_TORQUE,
-            command_deadband=constants.GRIPPER_COMMAND_DEADBAND,
-            trigger_press_threshold=constants.GRIPPER_TRIGGER_PRESS_THRESHOLD,
-            trigger_release_threshold=constants.GRIPPER_TRIGGER_RELEASE_THRESHOLD,
-            close_rate_per_s=constants.GRIPPER_CLOSE_RATE_PER_S,
-            open_rate_per_s=constants.GRIPPER_OPEN_RATE_PER_S,
-            stop_on_overload_32=constants.GRIPPER_STOP_ON_OVERLOAD_32,
-            force_feedback_enabled=constants.GRIPPER_FORCE_FEEDBACK_ENABLED,
-            current_limit_ma=constants.GRIPPER_CURRENT_LIMIT_MA,
-            current_trip_samples=constants.GRIPPER_CURRENT_TRIP_SAMPLES,
-            feedback_interval_s=constants.GRIPPER_FEEDBACK_INTERVAL_S,
-            feedback_valid_age_s=constants.GRIPPER_FEEDBACK_VALID_AGE_S,
-            feedback_abort_age_s=constants.GRIPPER_FEEDBACK_ABORT_AGE_S,
-            hold_torque=constants.GRIPPER_HOLD_TORQUE,
-            mode=constants.GRIPPER_MODE,
+            port=devices.GRIPPER_PORT,
+            servo_id=devices.GRIPPER_SERVO_ID,
+            raw_open=devices.GRIPPER_RAW_OPEN,
+            raw_close=devices.GRIPPER_RAW_CLOSE,
+            max_close_command=devices.GRIPPER_MAX_CLOSE_COMMAND,
+            feedback_raw_open=devices.GRIPPER_FEEDBACK_RAW_OPEN,
+            feedback_raw_close=devices.GRIPPER_FEEDBACK_RAW_CLOSE,
+            speed=devices.GRIPPER_SPEED,
+            target_torque=devices.GRIPPER_TARGET_TORQUE,
+            command_deadband=devices.GRIPPER_COMMAND_DEADBAND,
+            trigger_press_threshold=devices.GRIPPER_TRIGGER_PRESS_THRESHOLD,
+            trigger_release_threshold=devices.GRIPPER_TRIGGER_RELEASE_THRESHOLD,
+            close_rate_per_s=devices.GRIPPER_CLOSE_RATE_PER_S,
+            open_rate_per_s=devices.GRIPPER_OPEN_RATE_PER_S,
+            stop_on_overload_32=devices.GRIPPER_STOP_ON_OVERLOAD_32,
+            force_feedback_enabled=devices.GRIPPER_FORCE_FEEDBACK_ENABLED,
+            current_limit_ma=devices.GRIPPER_CURRENT_LIMIT_MA,
+            current_trip_samples=devices.GRIPPER_CURRENT_TRIP_SAMPLES,
+            feedback_interval_s=devices.GRIPPER_FEEDBACK_INTERVAL_S,
+            feedback_valid_age_s=devices.GRIPPER_FEEDBACK_VALID_AGE_S,
+            feedback_abort_age_s=devices.GRIPPER_FEEDBACK_ABORT_AGE_S,
+            hold_torque=devices.GRIPPER_HOLD_TORQUE,
+            mode=devices.GRIPPER_MODE,
         ),
         lift=LiftConfig(
             enabled=lift_enabled,
-            host=constants.LIFT_HOST,
-            port=constants.LIFT_PORT,
-            unit_id=constants.LIFT_UNIT_ID,
-            home_on_start=constants.LIFT_HOME_ON_START,
-            home_di_index=constants.LIFT_HOME_DI_INDEX,
-            home_speed=constants.LIFT_HOME_SPEED,
-            home_timeout_s=constants.LIFT_HOME_TIMEOUT_S,
-            max_height_mm=constants.LIFT_MAX_HEIGHT_MM,
-            command_rate_hz=constants.LIFT_COMMAND_RATE_HZ,
-            drive_speed=constants.LIFT_DRIVE_SPEED,
-            release_compensation_mm=constants.LIFT_RELEASE_COMPENSATION_MM,
-            socket_timeout_s=constants.LIFT_SOCKET_TIMEOUT_S,
-            auto_enable_on_start=constants.LIFT_AUTO_ENABLE_ON_START,
+            host=devices.LIFT_HOST,
+            port=devices.LIFT_PORT,
+            unit_id=devices.LIFT_UNIT_ID,
+            home_on_start=devices.LIFT_HOME_ON_START,
+            home_di_index=devices.LIFT_HOME_DI_INDEX,
+            home_speed=devices.LIFT_HOME_SPEED,
+            home_timeout_s=devices.LIFT_HOME_TIMEOUT_S,
+            max_height_mm=devices.LIFT_MAX_HEIGHT_MM,
+            command_rate_hz=devices.LIFT_COMMAND_RATE_HZ,
+            drive_speed=devices.LIFT_DRIVE_SPEED,
+            release_compensation_mm=devices.LIFT_RELEASE_COMPENSATION_MM,
+            socket_timeout_s=devices.LIFT_SOCKET_TIMEOUT_S,
+            auto_enable_on_start=devices.LIFT_AUTO_ENABLE_ON_START,
         ),
         chassis=ChassisConfig(
             enabled=chassis_enabled,
-            require_grip=constants.CHASSIS_REQUIRE_GRIP,
-            url=constants.CHASSIS_URL,
-            linear_speed_mm_s=constants.CHASSIS_LINEAR_SPEED_MM_S,
-            angular_speed_mdeg_s=constants.CHASSIS_ANGULAR_SPEED_MDEG_S,
-            deadzone=constants.CHASSIS_DEADZONE,
-            command_rate_hz=constants.CHASSIS_COMMAND_RATE_HZ,
-            feedback_rate_hz=constants.CHASSIS_FEEDBACK_RATE_HZ,
-            mode_confirm_timeout_s=constants.CHASSIS_MODE_CONFIRM_TIMEOUT_S,
-            rpc_timeout_s=constants.CHASSIS_RPC_TIMEOUT_S,
-            ready_wait_s=constants.CHASSIS_READY_WAIT_S,
-            allow_manual_localization_warning=constants.CHASSIS_ALLOW_LOCALIZATION_WARNING,
+            require_grip=devices.CHASSIS_REQUIRE_GRIP,
+            url=devices.CHASSIS_URL,
+            linear_speed_mm_s=devices.CHASSIS_LINEAR_SPEED_MM_S,
+            angular_speed_mdeg_s=devices.CHASSIS_ANGULAR_SPEED_MDEG_S,
+            deadzone=devices.CHASSIS_DEADZONE,
+            command_rate_hz=devices.CHASSIS_COMMAND_RATE_HZ,
+            feedback_rate_hz=devices.CHASSIS_FEEDBACK_RATE_HZ,
+            mode_confirm_timeout_s=devices.CHASSIS_MODE_CONFIRM_TIMEOUT_S,
+            rpc_timeout_s=devices.CHASSIS_RPC_TIMEOUT_S,
+            ready_wait_s=devices.CHASSIS_READY_WAIT_S,
+            allow_manual_localization_warning=devices.CHASSIS_ALLOW_LOCALIZATION_WARNING,
         ),
     )
     _validate(result)
